@@ -31,7 +31,12 @@ pub async fn list(State(ctx): State<AppContext>) -> Result<Response> {
 }
 
 #[debug_handler]
-pub async fn add(State(ctx): State<AppContext>, Json(params): Json<Params>) -> Result<Response> {
+pub async fn add(
+    auth: auth::JWT,
+    State(ctx): State<AppContext>,
+    Json(params): Json<Params>,
+) -> Result<Response> {
+    let _current_user = crate::models::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
     let mut item = ActiveModel {
         ..Default::default()
     };
