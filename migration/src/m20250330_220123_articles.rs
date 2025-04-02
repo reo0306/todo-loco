@@ -21,3 +21,11 @@ impl MigrationTrait for Migration {
         drop_table(m, "articles").await
     }
 }
+
+#[derive(DeriveIden)]
+pub enum Articles {
+    Table,
+    Id,
+    Title,
+    Body,
+}
