@@ -1,4 +1,17 @@
-#[deub_handler]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::unnecessary_struct_initialization)]
+#![allow(clippy::unused_async)]
+use loco_rs::prelude::*;
+use axum::debug_handler;
+use tokio_util::io::ReaderStream;
+use axum::body::Body;
+
+use crate::models::_entities::{
+    files::{ActiveModel, Entity, Model},
+    articles::{ActiveModel, Entity, Model},
+};
+
+#[debug_handler]
 pub async fn upload(
     _auth: auth::JWT,
     Path(articles_id): Path<i32>,
@@ -7,7 +20,7 @@ pub async fn upload(
 ) -> Result<Response> {
     let mut files = Vec::new();
 
-    while let Some(field) =multipart.next_field().await.map_err(|err| {
+    while let Some(field) = multipart.next_field().await.map_err(|err| {
         tracing::error!(error = ?err,"could not readd multipart");
         Error::BadRequest("could not readd multipartt".into())
     })? {
@@ -56,4 +69,45 @@ pub async fn upload(
     }
 
     format::json(files)
+}
+
+#[debug_handler]
+pub async fn list(
+    _auth: auth::JWT,
+    Path(articles_id): Path<i32>,
+    State(ctx): State<AppContext>,
+) -> Result<Response> {
+    let files = files::Entity::find()
+        .filter(files::Column::ArticlesId.eq(articles_id))
+        .order_by_asc(files::Column::Id)
+        .all(&ctx.db)
+        .await?;
+
+    format::json(files)
+}
+
+#[debug_handler]
+pub async fn view(
+    _auth: auth::JWT,
+    Path(files_id): Path<i32>,
+    State(ctx): State<AppContext>,
+) -> Result<Response> {
+    let file = files::Entity::find_by_id(files_id)
+        .one(&ctx.db)
+        .await?
+        .expect("File not found");
+
+    let file = fs::File::open(format!("{UPLOAD_DIR}/{}", file.file_path));
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    Ok(format::render().response().body(body)?)
+}
+
+pub fn routes() -> Routes {
+    Routes::new()
+        .prefix("files")
+        .add("/upload/:articles_id", post(upload))
+        .add("/list/:articles_id", get(list))
+        .add("/view/:files_id", get(view))
 }
