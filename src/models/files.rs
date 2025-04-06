@@ -3,7 +3,7 @@ pub use super::_entities::files::{ActiveModel, Model, Entity};
 pub type Files = Entity;
 
 #[async_trait::async_trait]
-impl ActiveModelBehevior for ActiveModel {
+impl ActiveModelBehavior for ActiveModel {
     async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
     where
         C: ConnectionTrait,

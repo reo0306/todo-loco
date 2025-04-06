@@ -2,14 +2,23 @@
 #![allow(clippy::unnecessary_struct_initialization)]
 #![allow(clippy::unused_async)]
 use loco_rs::prelude::*;
-use axum::debug_handler;
 use tokio_util::io::ReaderStream;
-use axum::body::Body;
+use axum::{
+    debug_handler,
+    body::Body,
+    extract::Multipart,
+};
+use std::path::PathBuf;
+use tokio::{
+    fs,
+    io::AsyncWriteExt
+};
 
 use crate::models::_entities::{
-    files::{ActiveModel, Entity, Model},
-    articles::{ActiveModel, Entity, Model},
+    files::{ActiveModel, Entity, Column},
 };
+
+const UPLOAD_DIR: &str = "~/";
 
 #[debug_handler]
 pub async fn upload(
@@ -29,7 +38,7 @@ pub async fn upload(
             _ => return Err(Error::BadRequest("file name not found".into())),
         };
         
-        let cotent = field.bytes().await.map_err(|err| {
+        let content = field.bytes().await.map_err(|err| {
             tracing::error!(error = ?err,"could not readd bytes");
             Error::BadRequest("could not readd bytes".into())
         })?;
@@ -51,7 +60,7 @@ pub async fn upload(
         f.write_all(&content).await?;
         f.flush().await?;
 
-        let file = files::ActiveModel {
+        let file = ActiveModel {
             articles_id: ActiveValue::Set(articles_id),
             file_path: ActiveValue::Set(
                 path.strip_prefix(UPLOAD_DIR)
@@ -62,7 +71,7 @@ pub async fn upload(
             ),
             ..Default::default()
         }
-        .insert(&ctr.db)
+        .insert(&ctx.db)
         .await?;
 
         files.push(file)
@@ -77,9 +86,8 @@ pub async fn list(
     Path(articles_id): Path<i32>,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
-    let files = files::Entity::find()
-        .filter(files::Column::ArticlesId.eq(articles_id))
-        .order_by_asc(files::Column::Id)
+    let files = Entity::find()
+        .filter(Column::ArticlesId.eq(articles_id))
         .all(&ctx.db)
         .await?;
 
@@ -92,12 +100,12 @@ pub async fn view(
     Path(files_id): Path<i32>,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
-    let file = files::Entity::find_by_id(files_id)
+    let file = Entity::find_by_id(files_id)
         .one(&ctx.db)
         .await?
         .expect("File not found");
 
-    let file = fs::File::open(format!("{UPLOAD_DIR}/{}", file.file_path));
+    let file = fs::File::open(format!("{UPLOAD_DIR}/{}", file.file_path)).await?;
     let stream = ReaderStream::new(file);
     let body = Body::from_stream(stream);
 
